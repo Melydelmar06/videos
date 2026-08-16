@@ -7,7 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import combinations
 
-from astroengine.constants import ASPECT_ANGLES
+from astroengine.constants import ASPECT_ANGLES, angular_separation
+from astroengine.evidence import evaluate_evidence_eligibility
 from astroengine.models import DataConfidence, NatalAspect
 from astroengine.settings import AstrologySettings
 
@@ -31,15 +32,10 @@ class AspectPoint:
         return self.name.lower() in LUMINARIES
 
 
-def _angular_separation(lon_a: float, lon_b: float) -> float:
-    diff = abs(lon_a - lon_b) % 360.0
-    return min(diff, 360.0 - diff)
-
-
 def _is_applying(a: AspectPoint, b: AspectPoint, exact_angle: float, current_orb: float) -> bool:
     future_a = (a.longitude + a.speed_longitude * _APPLYING_CHECK_DT_DAYS) % 360.0
     future_b = (b.longitude + b.speed_longitude * _APPLYING_CHECK_DT_DAYS) % 360.0
-    future_sep = _angular_separation(future_a, future_b)
+    future_sep = angular_separation(future_a, future_b)
     future_orb = abs(future_sep - exact_angle)
     return future_orb < current_orb
 
@@ -49,7 +45,7 @@ def find_aspects(points: list[AspectPoint], settings: AstrologySettings) -> list
     results: list[NatalAspect] = []
 
     for a, b in combinations(points, 2):
-        separation = _angular_separation(a.longitude, b.longitude)
+        separation = angular_separation(a.longitude, b.longitude)
         involves_luminary = a.is_luminary or b.is_luminary
 
         best_match: tuple[str, float, float] | None = None  # (aspect_name, exact_angle, orb)
@@ -78,7 +74,18 @@ def find_aspects(points: list[AspectPoint], settings: AstrologySettings) -> list
             confidence=confidence,
         ))
 
+    _annotate_evidence_eligibility(results)
     return results
+
+
+def _annotate_evidence_eligibility(aspects: list[NatalAspect]) -> None:
+    """Flags structural (Asc/Dsc, MC/IC, N/S Node opposing themselves) and
+    mirror-duplicate aspects (a third point contacting both ends of one of
+    those pairs) as not evidence-eligible. Mutates in place."""
+    entries = [(a.point_a, a.point_b, a.aspect_type) for a in aspects]
+    for aspect, eligibility in zip(aspects, evaluate_evidence_eligibility(entries)):
+        aspect.evidence_eligible = eligibility.eligible
+        aspect.evidence_note = eligibility.note
 
 
 def _combine_confidence(a: DataConfidence | None, b: DataConfidence | None) -> DataConfidence:

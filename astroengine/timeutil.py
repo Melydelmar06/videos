@@ -15,7 +15,7 @@ deliberately explicit rather than convenient:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, time, datetime, timezone as dt_timezone
+from datetime import date, time, datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 import swisseph as swe
@@ -63,3 +63,15 @@ def birth_julian_moment(local_date: date, local_time: time, timezone_name: str) 
     """One-shot: birth-local date/time/timezone -> JulianMoment."""
     utc_dt = local_time_to_utc(local_date, local_time, timezone_name)
     return utc_to_julian_moment(utc_dt)
+
+
+def jd_ut_to_datetime(jd_ut: float) -> datetime:
+    """UT1 Julian day -> aware UTC datetime. Used by the timing engine to
+    turn scan results (which work in Julian days) back into calendar dates."""
+    year, month, day, hour_frac = swe.revjul(jd_ut, swe.GREG_CAL)
+    whole_hour = int(hour_frac)
+    minute_frac = (hour_frac - whole_hour) * 60
+    minute = int(minute_frac)
+    second = (minute_frac - minute) * 60
+    base = datetime(year, month, day, whole_hour, minute, tzinfo=dt_timezone.utc)
+    return base + timedelta(seconds=second)

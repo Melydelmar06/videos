@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import date, time
+from datetime import date, datetime, time
 from typing import Optional
 
 
@@ -116,8 +116,46 @@ class NatalAspect:
     orb: float                      # absolute orb, degrees, always >= 0
     is_applying: bool
     confidence: DataConfidence
+    # evidence_eligible is False for structural (Asc/Dsc, MC/IC, N/S Node
+    # opposing themselves) or mirror-duplicate aspects -- see
+    # astroengine.evidence. The aspect itself is still stored/returned;
+    # it's just excluded from corroboration/strength/convergence counts.
+    evidence_eligible: bool = True
+    evidence_note: Optional[str] = None
     birth_profile_id: Optional[int] = None
     id: Optional[int] = None
+
+
+@dataclass
+class TimingHit:
+    """One timing-system finding: a moving point (transiting/progressed/
+    directed/return/lunation) contacting a natal point.
+
+    Calculation vs. evidence, kept explicit per point:
+      - orb_at_reference / is_applying / entry_into_orb / exact_hit_dates /
+        exit_from_orb / degree_at_reference are pure calculation -- geometry,
+        no judgment.
+      - evidence_eligible / evidence_note come from astroengine.evidence
+        (excludes structural/mirror-duplicate contacts).
+      - evidence_strength is the interpretation-support tier (Strong/
+        Moderate/Weak per ARCHITECTURE.md) and is only meaningful when
+        evidence_eligible is True; it is None otherwise.
+    """
+    system: str                       # "transit" | "progression" | "solar_arc" | "solar_return" | "eclipse"
+    moving_point: str                 # e.g. "transit:jupiter", "progressed:moon", "solar_arc:mars"
+    natal_target: str                 # natal point/angle/node being contacted
+    aspect_type: str
+    exact_angle: float
+    degree_at_reference: float        # moving point's ecliptic longitude at the reference moment
+    orb_at_reference: float           # orb (degrees) as of the reference moment, always >= 0
+    is_applying: bool                 # as of the reference moment
+    entry_into_orb: Optional[datetime]
+    exact_hit_dates: list             # list[datetime] -- can have more than one (retrograde stations)
+    exit_from_orb: Optional[datetime]
+    confidence: DataConfidence        # inherited from the natal target
+    evidence_eligible: bool = True
+    evidence_note: Optional[str] = None
+    evidence_strength: Optional[str] = None   # "strong" | "moderate" | "weak" | None
 
 
 @dataclass

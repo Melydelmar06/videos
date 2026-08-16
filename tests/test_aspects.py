@@ -91,3 +91,37 @@ def test_aspect_confidence_takes_the_weaker_endpoint():
     b = AspectPoint(name="ascendant", longitude=90.0, confidence=DataConfidence(basis="unknown_time"))
     aspects = find_aspects([a, b], AstrologySettings())
     assert aspects[0].confidence.basis == "unknown_time"
+
+
+def test_structural_and_mirror_aspects_flagged_ineligible():
+    points = [
+        AspectPoint(name="Ascendant", longitude=0.0),
+        AspectPoint(name="Descendant", longitude=180.0),
+        AspectPoint(name="Midheaven", longitude=90.0),
+        AspectPoint(name="IC", longitude=270.0),
+        AspectPoint(name="mars", longitude=91.0),  # ~1 deg square to both MC and IC (a linked pair)
+    ]
+    aspects = find_aspects(points, AstrologySettings())
+    by_pair = {frozenset((a.point_a, a.point_b)): a for a in aspects}
+
+    structural = by_pair[frozenset(("Ascendant", "Descendant"))]
+    assert structural.evidence_eligible is False
+    assert "structural" in structural.evidence_note
+
+    mc_ic_structural = by_pair[frozenset(("Midheaven", "IC"))]
+    assert mc_ic_structural.evidence_eligible is False
+
+    mars_mc = by_pair[frozenset(("mars", "Midheaven"))]
+    mars_ic = by_pair[frozenset(("mars", "IC"))]
+    # MC and IC are a linked pair -- mars squaring both is one fact, not two
+    assert sum(a.evidence_eligible for a in (mars_mc, mars_ic)) == 1
+
+
+def test_ordinary_aspects_remain_evidence_eligible():
+    points = [
+        AspectPoint(name="sun", longitude=0.0),
+        AspectPoint(name="moon", longitude=90.0),
+    ]
+    aspects = find_aspects(points, AstrologySettings())
+    assert aspects[0].evidence_eligible is True
+    assert aspects[0].evidence_note is None
