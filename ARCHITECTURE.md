@@ -23,8 +23,9 @@ as-wheels rendering, no multi-user auth — this is a single-user local tool.
 ## Calculation library: Swiss Ephemeris (`pyswisseph`)
 
 **Recommendation: use `pyswisseph` directly**, the Python binding for the
-Swiss Ephemeris (the same engine behind Solar Fire, Kepler, AstroGold, and
-basically every professional astrology program). It's free for personal/non-
+Swiss Ephemeris — a widely used, professional-grade calculation engine
+(it's the engine or reference standard behind a large share of astrology
+software, both commercial and open source). It's free for personal/non-
 commercial use, accurate to arc-seconds (JPL DE431-derived), and gives full
 control over every calculation this project needs: planetary positions,
 houses (multiple systems), retrograde stations, and — critically — the custom
@@ -56,6 +57,40 @@ arithmetic on the birth date and name — implement directly, no dependency.
 
 ---
 
+## Astrology settings — stored per profile, not hardcoded
+
+Every calculation choice that different astrological schools disagree about
+must be explicit and stored, not baked into the code, so results are
+reproducible and auditable:
+
+```
+AstrologySettings
+  id, birth_profile_id (FK, one-to-one),
+  zodiac_type,            -- "tropical" | "sidereal"
+  ayanamsha,               -- e.g. "lahiri" — only used when zodiac_type = sidereal
+  house_system,            -- "placidus" | "whole_sign" | "koch" | "equal" | "campanus" | ...
+  node_type,                -- "mean" | "true"
+  rulership_scheme,         -- "traditional" | "modern" — affects which planet rules which sign/house
+  aspect_set_json,          -- which aspects are active: conjunction, sextile, square, trine,
+                             -- opposition, plus optional minors (semisextile, quincunx, etc.)
+  orb_rules_json,           -- orb per aspect type, with optional per-body overrides
+                             -- (e.g. luminaries get wider orbs than outer planets)
+  timezone_policy_json,     -- how birth-local-time -> UTC is resolved (see below)
+  created_at, updated_at
+```
+
+`timezone_policy_json` records, per profile: the IANA timezone name used
+(e.g. `"Europe/Rome"`, not just a raw UTC offset, so historical DST rules
+resolve correctly), whether the birth time is known exactly or approximate,
+and the fallback behavior if it's unknown (e.g. noon chart with houses/angles
+suppressed rather than silently guessing a time).
+
+Defaults ship as a sensible preset (tropical, Placidus, mean node, modern
+rulerships, major aspects only, standard orb table) but every field is
+overridable per profile.
+
+---
+
 ## Core data model (SQLite, single user)
 
 ```
@@ -65,16 +100,20 @@ BirthProfile
 
 NatalPlanet
   planet, sign, degree_in_sign, absolute_degree,
-  house, is_retrograde, speed
+  house, is_retrograde, speed,
+  data_confidence_json     -- see "Data confidence" below
 
 HouseCusp
-  house_number, sign, absolute_degree, ruling_planet
+  house_number, sign, absolute_degree, ruling_planet,
+  data_confidence_json
 
 NatalAngle              -- Ascendant, Midheaven, Descendant, IC
-  name, sign, absolute_degree
+  name, sign, absolute_degree,
+  data_confidence_json
 
 NatalAspect
-  planet_a, planet_b, aspect_type, orb, is_applying
+  planet_a, planet_b, aspect_type, orb, is_applying,
+  data_confidence_json
 
 LifeEvent
   id, start_date, end_date (nullable for single-day events),
@@ -84,7 +123,9 @@ LifeEvent
 
 ThemeSignificator        -- static reference table, seeded once
   theme,                 -- e.g. "career", "children", "relationships", "relocation/visa"
-  house_numbers, planets, points   -- what to check for that theme
+  house_numbers,         -- houses associated with the theme
+  house_ruler_role,      -- flag: also pull whichever planet currently rules those houses
+  planets, angles        -- specific bodies/points associated with the theme, independent of house
 
 Reading                  -- log of past queries, optional but cheap to keep
   id, query_text, date_range_start, date_range_end,
@@ -96,7 +137,34 @@ function of birth date + target date, computed at query time.
 
 ---
 
-## The four timing systems — computed on demand, not pre-generated forever
+## Data confidence vs. evidence strength — two different things
+
+These must not be conflated:
+
+- **Data confidence** (calculation layer) — how trustworthy a *computed
+  placement* is, given the precision of the inputs. Examples: birth time
+  unknown → houses/angles/Moon-sign-near-boundary are unreliable or
+  suppressed entirely; birth time is a rounded/approximate value (e.g. "around
+  3pm") → angles are usable but flagged low-precision; a placement sits within
+  a fraction of a degree of a sign or house boundary → flagged
+  `near_boundary` since small timing/location errors could flip it. This is
+  attached to natal placements at calculation time and never changes.
+
+- **Evidence strength** (interpretation-support layer, not built in V1) — how
+  strongly a *timing hit or pattern* supports a theme for a given date range
+  (the Strong/Moderate/Weak tiers described later in this document). This is
+  about corroboration and exactness of transits/progressions/etc., computed
+  per query.
+
+A placement can have high data confidence (exact birth time, well away from
+any boundary) and still turn out to carry only Weak evidence for a given
+theme in a given month — these are orthogonal, and the output packet keeps
+them in separate fields so the AI interpreting the data never confuses
+"I'm sure where Mars was" with "Mars is a strong signal for this question."
+
+---
+
+## The five timing systems — computed on demand, not pre-generated forever
 
 Precomputing transits/progressions/solar arcs for "the next 50 years" and
 storing them is wasted work and storage. Instead, each is a function of
@@ -120,7 +188,30 @@ specific window:
   against natal points for hits within orb.
 
 Each hit is stored transiently as part of a query's output (in `Reading.output_json`
-if you want history), not as a permanently maintained table.
+if you want history), not as a permanently maintained table. Every timing hit,
+regardless of which of the five systems produced it, carries the same shape:
+
+```
+TimingHit
+  system                 -- transit | progression | solar_arc | solar_return | eclipse
+  moving_point            -- e.g. "transiting Jupiter", "progressed Moon", "SA Mars"
+  natal_point              -- the natal planet/angle/cusp being contacted
+  aspect_type
+  is_applying              -- true = approaching exact, false = separating
+  current_orb              -- orb as of the query's reference moment
+  entry_into_orb           -- date the moving point first came within orb
+  exact_hit_dates          -- list, not a single date — a hit can turn exact more
+                             -- than once (retrograde stations on transits, or a
+                             -- direct/retrograde/direct triple pass)
+  exit_from_orb            -- date the moving point leaves orb for good
+  data_confidence_json     -- inherited from the natal point involved
+```
+
+Storing entry/exact/exit explicitly (instead of just "the date it was exact")
+matters because a slow outer-planet transit can be "in range" for months and
+turn exact two or three times around a retrograde station — the AI needs the
+whole shape of that window, not one date, to reason about when a theme is
+active versus merely approaching or fading.
 
 ---
 
@@ -128,11 +219,25 @@ if you want history), not as a permanently maintained table.
 
 For a theme (e.g. "children/motherhood") and a date range, the engine:
 
-1. Looks up that theme's significators (`ThemeSignificator` — e.g. 5th house
-   cusp/ruler, Moon, Venus, Jupiter for fertility/children).
-2. Pulls every hit across all five systems above that touches one of those
-   significators inside the date range.
-3. Scores each hit, then classifies:
+1. Looks up that theme's significators (`ThemeSignificator`) — and this is
+   deliberately **more than a house list**. A theme resolves to:
+   - the relevant **house(s)** (e.g. 5th house for children),
+   - the **current ruler(s) of those houses** (whichever planet rules the
+     sign on that house's cusp, per the profile's `rulership_scheme` — this
+     is resolved dynamically from the natal chart, not hardcoded per theme),
+   - specific **planets** traditionally/naturally tied to the theme (e.g.
+     Moon and Venus for fertility) independent of what house they occupy,
+   - relevant **angles** (e.g. IC for home/family themes, MC for career),
+     since angle contacts are often as significant as house-cusp contacts.
+2. Pulls every hit across all five timing systems that touches *any* of
+   those significators inside the date range.
+3. Requires **repeated confirmation across independent systems** before a
+   window counts as strong — a single transit touching the 5th house ruler
+   is not treated the same as a transit, a progression, and a solar arc all
+   converging on the same natal point in the same window. Convergence across
+   systems is the primary signal the strength tiers below are built around,
+   not house involvement by itself.
+4. Scores each hit, then classifies:
 
 | Tier | Criteria |
 |---|---|
