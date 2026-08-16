@@ -1,15 +1,25 @@
 """Solar returns: the exact annual moment the transiting Sun returns to its
 natal degree, and that moment's chart compared against the natal chart.
 
-V1 simplification, documented rather than silently assumed: the return
-chart is cast for the birth LOCATION (not current residence) -- relocated
-solar returns are a real, commonly-used technique but out of scope here.
+Location: a solar return's houses/angles (Ascendant, Midheaven) depend on
+WHERE the person physically is at the return moment -- unlike the return's
+planetary positions, which are geocentric and location-independent. Callers
+should pass solar_return_location (the person's actual location at that
+moment) when known. If it isn't supplied, this module falls back to the
+birth location purely so a chart can still be shown, and marks the result
+location_known=False -- callers must not treat that fallback as if it were
+the real answer.
 
 Only return PLANETS (+ node) are used as "movers" for aspect-hit generation
 (never return angles), matching the same reasoning as transits/progressions:
 it keeps the linked-pair mirror-duplicate logic confined to the natal-target
 side. Return Ascendant/Midheaven are still computed and reported as
-descriptive context, just not aspected.
+descriptive context, just not aspected -- which also means NO current
+solar_return TimingHit depends on location at all (movers are geocentric
+planets, targets are the natal chart's own fixed points). The location_known
+flag and the "unknown_location" confidence-basis handling in
+astroengine.evidence exist to keep that true if return-house/angle-based
+hits are ever added later, not because today's hits need it.
 
 A solar return hit has no meaningful "approach" -- it's a snapshot chart,
 valid for the ~year until the next return, at a fixed orb the whole time.
@@ -47,6 +57,8 @@ class ReturnChart:
     planets: list[tuple]        # (name, longitude, speed)
     ascendant: float
     midheaven: float
+    location_known: bool        # False if no solar_return_location was supplied
+                                 # (ascendant/midheaven then fall back to birth location)
 
 
 def find_solar_return_jd(natal_sun_longitude: float, return_year: int, birth_month: int, birth_day: int,
@@ -75,7 +87,9 @@ def find_solar_return_jd(natal_sun_longitude: float, return_year: int, birth_mon
     return (lo + hi) / 2.0
 
 
-def compute_return_chart(return_jd_ut: float, latitude: float, longitude: float, settings: AstrologySettings) -> ReturnChart:
+def compute_return_chart(
+    return_jd_ut: float, latitude: float, longitude: float, settings: AstrologySettings, location_known: bool,
+) -> ReturnChart:
     planets = []
     for name in ("sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto"):
         raw = planet_position(return_jd_ut, name, settings.zodiac_type, settings.ayanamsha)
@@ -92,6 +106,7 @@ def compute_return_chart(return_jd_ut: float, latitude: float, longitude: float,
         planets=planets,
         ascendant=raw_houses.ascendant,
         midheaven=raw_houses.midheaven,
+        location_known=location_known,
     )
 
 
@@ -103,10 +118,21 @@ def compute_solar_return_hits(
     chart: NatalChart, settings: AstrologySettings, natal_sun_longitude: float,
     birth_month: int, birth_day: int, birth_latitude: float, birth_longitude: float,
     query_start: datetime, query_end: datetime,
+    solar_return_location: tuple[float, float] | None = None,
 ) -> tuple[list[TimingHit], list[ReturnChart]]:
     """Returns (hits, return_charts_used) -- the return charts are also
     handed back so the forecast packet can include them as descriptive
-    context (ascendant/midheaven of the governing return year)."""
+    context (ascendant/midheaven of the governing return year).
+
+    solar_return_location: (latitude, longitude) the person actually was at
+    the return moment. If omitted, the return chart's angles/houses fall
+    back to the birth location and are marked location_known=False (see
+    module docstring) -- the return PLANETS used for hit generation are
+    geocentric and unaffected either way.
+    """
+    location_known = solar_return_location is not None
+    return_latitude, return_longitude = solar_return_location if location_known else (birth_latitude, birth_longitude)
+
     query_start_jd = utc_to_julian_moment(query_start).jd_ut
     query_end_jd = utc_to_julian_moment(query_end).jd_ut
 
@@ -129,7 +155,7 @@ def compute_solar_return_hits(
     return_charts: list[ReturnChart] = []
 
     for return_jd, validity_end_jd in governing_returns:
-        return_chart = compute_return_chart(return_jd, birth_latitude, birth_longitude, settings)
+        return_chart = compute_return_chart(return_jd, return_latitude, return_longitude, settings, location_known)
         return_charts.append(return_chart)
         entry_dt = jd_ut_to_datetime(return_jd)
         exit_dt = jd_ut_to_datetime(validity_end_jd)

@@ -46,8 +46,9 @@ def _serialize_hit(hit: TimingHit, window_start: datetime, window_end: datetime)
 def build_forecast_packet(
     profile: BirthProfile, settings: AstrologySettings, chart: NatalChart,
     query_start: datetime, query_end: datetime,
+    solar_return_location: tuple[float, float] | None = None,
 ) -> dict:
-    result = compute_timing_result(chart, settings, profile, query_start, query_end)
+    result = compute_timing_result(chart, settings, profile, query_start, query_end, solar_return_location)
 
     eligible = [h for h in result.hits if h.evidence_eligible]
     excluded = [h for h in result.hits if not h.evidence_eligible]
@@ -79,7 +80,15 @@ def build_forecast_packet(
                 "return_utc": rc.return_utc.isoformat(),
                 "ascendant": round(rc.ascendant, 4),
                 "midheaven": round(rc.midheaven, 4),
-                "note": "cast for the birth location, not current residence (V1 simplification)",
+                "location_known": rc.location_known,
+                "note": (
+                    "cast for the supplied solar_return_location"
+                    if rc.location_known else
+                    "NO solar_return_location was supplied -- these angles fall back to the "
+                    "birth location and are NOT a reliable indication of the actual return "
+                    "chart; descriptive only, never used as evidence (return-chart hits are "
+                    "generated from geocentric planets, which don't depend on location)"
+                ),
             }
             for rc in result.solar_return_charts
         ],
@@ -119,5 +128,6 @@ def build_forecast_packet(
             "Excluded hits (structural/mirror-duplicate) must never be counted toward corroboration or convergence, even though they are listed above for transparency.",
             "entry_into_orb / exit_from_orb of null means the hit was already in orb at the start of the scanned window, or is still in orb at its end -- not that it lacks a real boundary.",
             "Solar arc and slow progressed/transiting-outer-planet hits can have very wide entry/exit windows (months to years) -- that reflects how those techniques actually work, not an error.",
+            "Solar return chart angles (ascendant/midheaven) are location-dependent; see solar_return_charts_used[].location_known -- when false, those angles are a birth-location fallback and must not be treated as accurate.",
         ],
     }

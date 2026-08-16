@@ -141,7 +141,9 @@ class TimingHit:
         Moderate/Weak per ARCHITECTURE.md) and is only meaningful when
         evidence_eligible is True; it is None otherwise.
     """
-    system: str                       # "transit" | "progression" | "solar_arc" | "solar_return" | "eclipse"
+    system: str                       # "transit" | "progression" | "solar_arc" | "solar_return" | "eclipse" | "lunation"
+                                       # "eclipse" is reserved for actual eclipses; an ordinary New/Full
+                                       # Moon that aspects the chart is "lunation" -- never "eclipse".
     moving_point: str                 # e.g. "transit:jupiter", "progressed:moon", "solar_arc:mars"
     natal_target: str                 # natal point/angle/node being contacted
     aspect_type: str

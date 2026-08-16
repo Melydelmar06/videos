@@ -33,12 +33,16 @@ def test_raises_for_unknown_birth_time():
 
 
 def test_all_five_systems_represented(engine_fixture):
+    """Sept-Oct 2026 has no real eclipse (nearest is Aug 12/28 2026), so the
+    5th system shows up as "lunation" here, not "eclipse" -- see
+    test_timing_eclipses.py for confirmation that a window WITH a real
+    eclipse tags it "eclipse" correctly."""
     chart, settings, profile = engine_fixture
     start = datetime(2026, 9, 1, tzinfo=timezone.utc)
     end = datetime(2026, 10, 31, 23, 59, 59, tzinfo=timezone.utc)
     result = compute_timing_result(chart, settings, profile, start, end)
     systems = {h.system for h in result.hits}
-    assert systems == {"transit", "progression", "solar_arc", "solar_return", "eclipse"}
+    assert systems == {"transit", "progression", "solar_arc", "solar_return", "lunation"}
 
 
 def test_every_eligible_hit_has_a_strength_tier_ineligible_have_none(engine_fixture):

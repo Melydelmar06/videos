@@ -76,4 +76,33 @@ def test_exact_hit_dates_has_exactly_one_entry_and_window_is_symmetric(eclipse_f
         exact = h.exact_hit_dates[0]
         assert (exact - h.entry_into_orb).days == 3
         assert (h.exit_from_orb - exact).days == 3
-        assert h.system == "eclipse"
+        # no real eclipse falls in Sept-Oct 2026 (nearest is Aug 12/28 2026,
+        # next is Feb 2027) -- every hit here must be tagged "lunation", not
+        # "eclipse".
+        assert h.system == "lunation"
+
+
+def test_real_eclipses_are_tagged_eclipse_not_lunation(eclipse_fixture):
+    """Regression: system must distinguish an actual eclipse from a plain
+    New/Full Moon that merely aspects the chart -- a plain lunation must
+    never be classified or weighted as an eclipse. Aug 2026 has two real
+    eclipses (2026-08-12 solar total, 2026-08-28 lunar partial); the other
+    New/Full Moons in the same window must still come through as
+    "lunation"."""
+    chart, settings = eclipse_fixture
+    start = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    hits, events = compute_eclipse_hits(chart, settings, start, end)
+
+    eclipse_movers = {h.moving_point for h in hits if h.system == "eclipse"}
+    lunation_movers = {h.moving_point for h in hits if h.system == "lunation"}
+
+    assert any("solar_total" in m for m in eclipse_movers)
+    assert any("lunar_partial" in m for m in eclipse_movers)
+    assert not any("solar_total" in m or "lunar_partial" in m for m in lunation_movers)
+    for h in hits:
+        assert h.system in ("eclipse", "lunation")
+        if h.system == "eclipse":
+            assert "eclipse:" in h.moving_point
+        else:
+            assert "lunation:" in h.moving_point

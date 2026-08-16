@@ -66,6 +66,64 @@ def test_correct_return_year_governs_a_pre_birthday_window(solar_return_fixture)
         assert h.exit_from_orb.year == 2026
 
 
+def test_location_known_flag_reflects_whether_a_return_location_was_supplied(solar_return_fixture):
+    chart, settings, natal_sun, profile = solar_return_fixture
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 31, tzinfo=timezone.utc)
+
+    _hits, returns_no_location = compute_solar_return_hits(
+        chart, settings, natal_sun, 11, 6, profile.latitude, profile.longitude, start, end,
+    )
+    assert returns_no_location[0].location_known is False
+
+    _hits, returns_with_location = compute_solar_return_hits(
+        chart, settings, natal_sun, 11, 6, profile.latitude, profile.longitude, start, end,
+        solar_return_location=(40.7128, -74.0060),  # New York, hypothetical actual location
+    )
+    assert returns_with_location[0].location_known is True
+
+
+def test_supplied_return_location_actually_changes_the_return_angles(solar_return_fixture):
+    """Confirms the location is actually used, not silently ignored."""
+    chart, settings, natal_sun, profile = solar_return_fixture
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 31, tzinfo=timezone.utc)
+
+    _hits, birth_location_returns = compute_solar_return_hits(
+        chart, settings, natal_sun, 11, 6, profile.latitude, profile.longitude, start, end,
+    )
+    _hits, elsewhere_returns = compute_solar_return_hits(
+        chart, settings, natal_sun, 11, 6, profile.latitude, profile.longitude, start, end,
+        solar_return_location=(64.1466, -21.9426),  # Reykjavik -- far from Cartagena
+    )
+    assert birth_location_returns[0].ascendant != pytest.approx(elsewhere_returns[0].ascendant, abs=1.0)
+
+
+def test_current_solar_return_hits_are_unaffected_by_location(solar_return_fixture):
+    """Documents/confirms the current design: return-chart hits are built
+    from geocentric planets vs the natal chart's own fixed points, so no
+    hit's confidence or evidence should differ based on solar_return_location
+    -- only the descriptive return-chart angles do."""
+    chart, settings, natal_sun, profile = solar_return_fixture
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    end = datetime(2026, 10, 31, tzinfo=timezone.utc)
+
+    hits_no_location, _ = compute_solar_return_hits(
+        chart, settings, natal_sun, 11, 6, profile.latitude, profile.longitude, start, end,
+    )
+    hits_with_location, _ = compute_solar_return_hits(
+        chart, settings, natal_sun, 11, 6, profile.latitude, profile.longitude, start, end,
+        solar_return_location=(64.1466, -21.9426),
+    )
+    assert len(hits_no_location) == len(hits_with_location)
+    for a, b in zip(
+        sorted(hits_no_location, key=lambda h: (h.moving_point, h.natal_target, h.aspect_type)),
+        sorted(hits_with_location, key=lambda h: (h.moving_point, h.natal_target, h.aspect_type)),
+    ):
+        assert a.orb_at_reference == pytest.approx(b.orb_at_reference, abs=1e-9)
+        assert a.confidence.basis == b.confidence.basis != "unknown_location"
+
+
 def test_no_solar_return_hit_lacks_a_validity_window(solar_return_fixture):
     chart, settings, natal_sun, profile = solar_return_fixture
     start = datetime(2026, 9, 1, tzinfo=timezone.utc)

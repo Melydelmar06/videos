@@ -8,6 +8,15 @@ hand-maintained almanac -- verified against well-known real eclipse dates
 Moons are found by root-finding on the Sun-Moon elongation crossing 0 or
 180 degrees.
 
+A hit's `system` is "eclipse" ONLY when the lunation is an actual eclipse
+(event.eclipse_label is not None); an ordinary New/Full Moon that happens to
+aspect the natal chart gets `system="lunation"` instead, never "eclipse" --
+these must stay distinguishable downstream, since the evidence-strength
+scorer (astroengine.evidence) treats real eclipses as inherently rare/
+significant enough to help qualify a hit for the Strong tier, and a plain
+monthly lunation must not get that same weight just because it aspects
+something.
+
 The "lunation point" checked against natal targets is the Moon's own
 ecliptic longitude at the exact lunation moment (at New Moon this is the
 same as the Sun's; at Full Moon the Sun is exactly opposite it, but only
@@ -166,9 +175,11 @@ def compute_eclipse_hits(
             continue  # influence window never touches the requested range
         relevant_events.append(event)
 
-        label = event.eclipse_label or event.kind
+        is_real_eclipse = event.eclipse_label is not None
+        system = "eclipse" if is_real_eclipse else "lunation"
+        label = event.eclipse_label if is_real_eclipse else event.kind
         event_date_str = jd_ut_to_datetime(event.jd_ut).date().isoformat()
-        mover_id = f"eclipse:{label}:{event_date_str}"
+        mover_id = f"{system}:{label}:{event_date_str}"
         moon_speed = planet_position(event.jd_ut, "moon", settings.zodiac_type, settings.ayanamsha).speed_longitude
 
         for target_name, target_longitude, target_confidence in targets:
@@ -182,7 +193,7 @@ def compute_eclipse_hits(
                     continue
 
                 hits.append(TimingHit(
-                    system="eclipse",
+                    system=system,
                     moving_point=mover_id,
                     natal_target=target_name,
                     aspect_type=aspect_name,

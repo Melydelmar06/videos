@@ -109,6 +109,51 @@ def test_fast_mover_exact_hit_capped_below_strong_even_if_corroborated():
     assert hits[1].evidence_strength == "strong"
 
 
+def test_plain_lunation_cannot_reach_strong_but_real_eclipse_can():
+    """Regression: system="lunation" (an ordinary New/Full Moon) must not
+    get the same 'rare, pay attention' mover credit as system="eclipse" --
+    otherwise every routine monthly lunation that happens to aspect the
+    chart exactly would inflate to Strong just like an actual eclipse."""
+    window_start, window_end = _dt(2026, 9, 1), _dt(2026, 10, 31)
+
+    lunation_hit = _hit("lunation", "lunation:new_moon:2026-10-10", "moon", "square",
+                         _dt(2026, 10, 7), _dt(2026, 10, 13), exact_dates=[_dt(2026, 10, 10)], orb=0.0)
+    corroborator = _hit("solar_arc", "solar_arc:mars", "moon", "square",
+                         _dt(2026, 9, 1), _dt(2026, 10, 31), exact_dates=[_dt(2026, 10, 10)], orb=0.0)
+    hits = [lunation_hit, corroborator]
+    annotate_timing_hit_evidence_eligibility(hits)
+    assign_evidence_strength(hits, window_start, window_end)
+    assert lunation_hit.evidence_strength == "moderate"  # not strong
+
+    eclipse_hit = _hit("eclipse", "eclipse:solar_total:2026-08-12", "moon", "square",
+                        _dt(2026, 8, 9), _dt(2026, 8, 15), exact_dates=[_dt(2026, 8, 12)], orb=0.0)
+    eclipse_corroborator = _hit("solar_arc", "solar_arc:mars", "moon", "square",
+                                 _dt(2026, 8, 1), _dt(2026, 8, 31), exact_dates=[_dt(2026, 8, 12)], orb=0.0)
+    eclipse_hits = [eclipse_hit, eclipse_corroborator]
+    annotate_timing_hit_evidence_eligibility(eclipse_hits)
+    assign_evidence_strength(eclipse_hits, _dt(2026, 8, 1), _dt(2026, 8, 31))
+    assert eclipse_hit.evidence_strength == "strong"
+
+
+def test_unknown_location_confidence_caps_below_strong():
+    """A hit whose confidence.basis is 'unknown_location' (a location-
+    dependent value computed without a real known location, e.g. a future
+    solar-return house/angle hit with no solar_return_location supplied)
+    must never reach Strong, even if every other Strong criterion is met."""
+    window_start, window_end = _dt(2026, 9, 1), _dt(2026, 10, 31)
+    hits = [
+        _hit("solar_return", "solar_return:sun", "Ascendant", "conjunction",
+             _dt(2025, 11, 5), _dt(2026, 11, 6), exact_dates=[], orb=0.0),
+        _hit("transit", "transit:jupiter", "Ascendant", "conjunction",
+             _dt(2026, 9, 1), _dt(2026, 10, 31), exact_dates=[_dt(2026, 9, 15)], orb=0.0),
+    ]
+    hits[0].confidence = DataConfidence(basis="unknown_location")
+    annotate_timing_hit_evidence_eligibility(hits)
+    assign_evidence_strength(hits, window_start, window_end)
+    assert hits[0].evidence_strength != "strong"
+    assert hits[0].evidence_strength == "moderate"  # still counts, just capped
+
+
 def test_wide_orb_uncorroborated_is_weak():
     window_start, window_end = _dt(2026, 9, 1), _dt(2026, 10, 31)
     hit = _hit("transit", "transit:jupiter", "sun", "trine", _dt(2026, 9, 1), _dt(2026, 9, 30), orb=5.0)

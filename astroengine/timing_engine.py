@@ -31,7 +31,13 @@ class TimingResult:
 def compute_timing_result(
     chart: NatalChart, settings: AstrologySettings, profile: BirthProfile,
     query_start: datetime, query_end: datetime,
+    solar_return_location: tuple[float, float] | None = None,
 ) -> TimingResult:
+    """solar_return_location: (latitude, longitude) the person actually was
+    at the governing solar return moment(s), if known. See
+    timing_solar_returns.py -- affects only the descriptive return-chart
+    angles, not any current hit (return-chart movers are geocentric
+    planets, unaffected by location)."""
     if not profile.time_known:
         raise ValueError(
             "the timing engine requires a known birth time (progressions, solar arc, and "
@@ -51,6 +57,7 @@ def compute_timing_result(
     solar_return_hits, return_charts = compute_solar_return_hits(
         chart, settings, natal_sun_longitude, profile.birth_date.month, profile.birth_date.day,
         profile.latitude, profile.longitude, query_start, query_end,
+        solar_return_location=solar_return_location,
     )
     hits += solar_return_hits
 

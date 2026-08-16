@@ -258,11 +258,15 @@ def _mover_body_name(moving_point: str) -> str:
 def _mover_qualifies_for_strong(system: str, moving_point: str) -> bool:
     """The Strong tier requires the mover to be 'slow/outer, or a directed/
     progressed point'. Directed/progressed systems always qualify (they are
-    slow in real-time by construction). Eclipses/lunations are treated as
-    qualifying too -- they're rare, non-repeating alignments, which is the
-    same "this doesn't happen often, so pay attention" property the slow-
-    outer-planet rule is protecting; also a judgment call, documented here
-    rather than left implicit.
+    slow in real-time by construction). Actual eclipses (system == "eclipse",
+    never plain New/Full Moon "lunation" hits -- see timing_eclipses.py) are
+    treated as qualifying too -- they're rare, non-repeating alignments,
+    which is the same "this doesn't happen often, so pay attention" property
+    the slow-outer-planet rule is protecting; also a judgment call,
+    documented here rather than left implicit. Ordinary monthly lunations
+    get no such boost -- they aspect the chart every month regardless of
+    whether that month is astrologically significant, so their mover alone
+    can never justify Strong.
     """
     if system in DIRECTED_SYSTEMS or system == "eclipse":
         return True
@@ -317,7 +321,14 @@ def classify_hit_strength(hit: TimingHit, effective_orb: float, corroborated: bo
     is_exact = effective_orb < EXACT_ORB_THRESHOLD_DEG
     mover_ok = _mover_qualifies_for_strong(hit.system, hit.moving_point)
 
-    if is_exact and is_hard and touches_angle_or_luminary and mover_ok and corroborated:
+    # a hit whose confidence is location-dependent and location wasn't
+    # actually known (e.g. a solar-return house/angle computed against a
+    # birth-location fallback because no return location was supplied) can
+    # never be Strong -- the underlying geometry itself is uncertain, no
+    # amount of corroboration or exactness should be read as confident.
+    location_ok = hit.confidence.basis != "unknown_location"
+
+    if is_exact and is_hard and touches_angle_or_luminary and mover_ok and corroborated and location_ok:
         return "strong"
 
     # "single-system exact hit" -> moderate, even without corroboration.
