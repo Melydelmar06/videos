@@ -22,6 +22,13 @@ ASPECT_SYMBOLS = {
 }
 
 
+def _format_offset(offset) -> str:
+    total_minutes = int(offset.total_seconds() // 60)
+    sign = "+" if total_minutes >= 0 else "-"
+    total_minutes = abs(total_minutes)
+    return f"UTC{sign}{total_minutes // 60:02d}:{total_minutes % 60:02d}"
+
+
 def ruler_pair(sign: str) -> tuple[str, str]:
     """(traditional_ruler, modern_ruler) for a sign -- identical for signs
     where the two schemes agree (everything except Scorpio/Aquarius/Pisces)."""
@@ -66,7 +73,9 @@ def build_json_report(
             "longitude": profile.longitude,
             "timezone_name": profile.timezone_name,
             "utc_datetime": moment.utc.isoformat(),
-            "utc_offset_used": str(moment.utc.astimezone(ZoneInfo(profile.timezone_name)).utcoffset()),
+            "utc_offset_used": _format_offset(
+                moment.utc.astimezone(ZoneInfo(profile.timezone_name)).utcoffset()
+            ),
             "julian_day_ut": moment.jd_ut,
             "julian_day_et": moment.jd_et,
         },
@@ -150,7 +159,7 @@ def build_human_report(
     add(f"  Local birth time: {profile.birth_date.isoformat()} {profile.birth_time.isoformat()}")
     add(f"  Place:            {profile.birth_place}  (lat {profile.latitude}, lon {profile.longitude})")
     tz_offset = moment.utc.astimezone(ZoneInfo(profile.timezone_name)).utcoffset()
-    add(f"  Timezone used:    {profile.timezone_name}  (historical offset at this date: UTC{tz_offset})")
+    add(f"  Timezone used:    {profile.timezone_name}  (historical offset at this date: {_format_offset(tz_offset)})")
     add(f"  Converted to UTC: {moment.utc.isoformat()}")
     add(f"  Julian Day (UT1): {moment.jd_ut:.6f}")
     add(f"  Julian Day (TT):  {moment.jd_et:.6f}")
