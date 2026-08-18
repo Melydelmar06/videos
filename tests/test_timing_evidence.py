@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from astroengine.evidence import (
     annotate_timing_hit_evidence_eligibility, assign_evidence_strength, classify_hit_strength,
+    compute_natal_clusters, independent_corroborator_count,
 )
 from astroengine.models import DataConfidence, TimingHit
 
@@ -94,19 +95,52 @@ def test_exact_but_uncorroborated_is_moderate_not_strong():
 
 
 def test_fast_mover_exact_hit_capped_below_strong_even_if_corroborated():
-    # Moon doesn't qualify as "slow/outer" -- even exact + hard + angle +
-    # corroborated, it can't reach Strong per ARCHITECTURE.md's mover gate.
+    # Moon doesn't qualify as "slow/outer" -- even exact + hard + angle, it
+    # can't reach Strong per ARCHITECTURE.md's mover gate. It also can never
+    # act as a corroborator FOR another hit (req #6: fast transiting movers
+    # are excluded from the corroborator pool entirely, background or
+    # temporal) -- so a real corroborator (transiting Saturn, slow/outer,
+    # exact one day later) is what pushes hits[1] to strong, not the Moon.
     window_start, window_end = _dt(2026, 9, 1), _dt(2026, 10, 31)
     hits = [
         _hit("transit", "transit:moon", "Ascendant", "conjunction", _dt(2026, 9, 3), _dt(2026, 9, 4),
              exact_dates=[_dt(2026, 9, 3, 12)], orb=0.0),
         _hit("solar_arc", "solar_arc:sun", "Ascendant", "conjunction", _dt(2026, 9, 1), _dt(2026, 9, 30),
              exact_dates=[_dt(2026, 9, 14)], orb=0.0),
+        _hit("transit", "transit:saturn", "Ascendant", "square", _dt(2026, 9, 1), _dt(2026, 9, 30),
+             exact_dates=[_dt(2026, 9, 15)], orb=0.0),
     ]
     annotate_timing_hit_evidence_eligibility(hits)
     assign_evidence_strength(hits, window_start, window_end)
     assert hits[0].evidence_strength == "moderate"
     assert hits[1].evidence_strength == "strong"
+    # the Moon must not appear as any kind of corroborator for hits[1]
+    assert not any("moon" in c for c in hits[1].background_corroborators)
+    assert not any("moon" in c for c in hits[1].temporal_corroborators)
+    assert any("saturn" in c for c in hits[1].temporal_corroborators)
+
+
+def test_fast_transit_mover_alone_cannot_create_a_strong_window():
+    """Regression for the audit finding itself: two hits whose active
+    windows merely overlap (both spanning the same months) but whose exact
+    dates land far apart must NOT corroborate each other into Strong --
+    only background. This is the exact shape of the Saturn/Moon Feb 2027
+    bug: a slow hit's wide orb window overlaps a bunch of other systems'
+    wide orb windows, none of which peak anywhere near its exact date."""
+    window_start, window_end = _dt(2027, 1, 1), _dt(2027, 3, 31)
+    hits = [
+        _hit("transit", "transit:saturn", "moon", "square", _dt(2026, 12, 1), _dt(2027, 4, 30),
+             exact_dates=[_dt(2027, 2, 19)], orb=0.0),
+        # active the whole quarter, but its OWN exact date is nowhere near
+        # Feb 19 -- this must be background only, not temporal.
+        _hit("progression", "progressed:venus", "moon", "trine", _dt(2026, 10, 1), _dt(2027, 6, 1),
+             exact_dates=[_dt(2027, 5, 30)], orb=0.0),
+    ]
+    annotate_timing_hit_evidence_eligibility(hits)
+    assign_evidence_strength(hits, window_start, window_end)
+    assert hits[0].evidence_strength != "strong"
+    assert hits[0].background_corroborators  # still active-at-the-same-time
+    assert not hits[0].temporal_corroborators  # but never peaks nearby
 
 
 def test_plain_lunation_cannot_reach_strong_but_real_eclipse_can():
@@ -228,6 +262,68 @@ def test_open_ended_windows_with_no_exit_or_exact_date_still_detected_as_overlap
     assert sum(h.evidence_eligible for h in hits) == 1
 
 
+def test_solar_return_never_supplies_temporal_corroboration():
+    """req #4: Solar Return is a background annual theme only. Even when a
+    solar-return hit's own window overlaps another hit's exact date very
+    closely, it must show up as background, never temporal, for that
+    other hit."""
+    window_start, window_end = _dt(2026, 9, 1), _dt(2026, 10, 31)
+    hits = [
+        _hit("transit", "transit:jupiter", "sun", "conjunction", _dt(2026, 9, 1), _dt(2026, 9, 30),
+             exact_dates=[_dt(2026, 9, 15)], orb=0.0),
+        _hit("solar_return", "solar_return:venus", "sun", "trine",
+             _dt(2025, 11, 5), _dt(2026, 11, 6), exact_dates=[_dt(2026, 9, 15)], orb=0.0),
+    ]
+    annotate_timing_hit_evidence_eligibility(hits)
+    assign_evidence_strength(hits, window_start, window_end)
+    assert hits[0].background_corroborators
+    assert not hits[0].temporal_corroborators
+    assert hits[0].evidence_strength != "strong"
+
+
+def test_solar_arc_becomes_temporal_only_when_exact_close_to_the_event():
+    """req #1/#4: a solar arc/progression hit is background by default; it
+    only earns TEMPORAL weight if it turns exact within the documented
+    proximity window (45 days) of the primary hit's own exact date."""
+    window_start, window_end = _dt(2026, 9, 1), _dt(2027, 3, 31)
+
+    close_hits = [
+        _hit("transit", "transit:saturn", "sun", "square", _dt(2026, 9, 1), _dt(2026, 9, 30),
+             exact_dates=[_dt(2026, 9, 15)], orb=0.0),
+        _hit("solar_arc", "solar_arc:mars", "sun", "square", _dt(2026, 6, 1), _dt(2026, 12, 1),
+             exact_dates=[_dt(2026, 9, 20)], orb=0.0),  # 5 days away
+    ]
+    annotate_timing_hit_evidence_eligibility(close_hits)
+    assign_evidence_strength(close_hits, window_start, window_end)
+    assert close_hits[0].evidence_strength == "strong"
+    assert close_hits[0].temporal_corroborators
+
+    far_hits = [
+        _hit("transit", "transit:saturn", "sun", "square", _dt(2026, 9, 1), _dt(2026, 9, 30),
+             exact_dates=[_dt(2026, 9, 15)], orb=0.0),
+        _hit("solar_arc", "solar_arc:mars", "sun", "square", _dt(2026, 6, 1), _dt(2027, 3, 1),
+             exact_dates=[_dt(2027, 2, 1)], orb=0.0),  # ~140 days away
+    ]
+    annotate_timing_hit_evidence_eligibility(far_hits)
+    assign_evidence_strength(far_hits, window_start, window_end)
+    assert far_hits[0].evidence_strength != "strong"
+    assert far_hits[0].background_corroborators
+    assert not far_hits[0].temporal_corroborators
+
+
+def test_eclipse_can_be_strong_standalone_without_corroboration():
+    """req #3's explicit exception: a real eclipse, exact, hard-or-conjunct
+    on an angle/luminary, is 'exceptionally important enough by itself' and
+    does not need another system to confirm the date."""
+    window_start, window_end = _dt(2026, 8, 1), _dt(2026, 8, 31)
+    hit = _hit("eclipse", "eclipse:solar_total:2026-08-12", "moon", "conjunction",
+               _dt(2026, 8, 9), _dt(2026, 8, 15), exact_dates=[_dt(2026, 8, 12)], orb=0.0)
+    assign_evidence_strength([hit], window_start, window_end)
+    assert hit.evidence_strength == "strong"
+    assert not hit.background_corroborators
+    assert not hit.temporal_corroborators
+
+
 def test_ineligible_hits_never_get_a_strength_tier():
     hits = [
         _hit("transit", "transit:saturn", "Ascendant", "square", _dt(2026, 9, 1), _dt(2026, 9, 20),
@@ -239,3 +335,33 @@ def test_ineligible_hits_never_get_a_strength_tier():
     assign_evidence_strength(hits, _dt(2026, 9, 1), _dt(2026, 10, 31))
     assert hits[1].evidence_eligible is False
     assert hits[1].evidence_strength is None
+
+
+def test_natal_clusters_group_tight_conjunctions_and_oppositions():
+    # Midheaven and Uranus 3 deg apart natally -- one transit through that
+    # degree area will tend to contact both within days of each other.
+    aspects = [
+        ("Midheaven", "uranus", "conjunction", 3.0),
+        ("sun", "mars", "square", 1.0),  # square never clusters, even tight
+        ("jupiter", "venus", "conjunction", 8.0),  # too wide to cluster
+    ]
+    clusters = compute_natal_clusters(aspects)
+    assert clusters["Midheaven"] == clusters["uranus"]
+    assert "sun" not in clusters and "mars" not in clusters
+    assert "jupiter" not in clusters and "venus" not in clusters
+
+
+def test_independent_corroborator_count_collapses_one_pass_through_a_cluster():
+    aspects = [("Midheaven", "uranus", "conjunction", 3.0)]
+    clusters = compute_natal_clusters(aspects)
+    hits = [
+        _hit("transit", "transit:jupiter", "Midheaven", "conjunction", _dt(2026, 9, 1), _dt(2026, 9, 10),
+             exact_dates=[_dt(2026, 9, 5)]),
+        _hit("transit", "transit:jupiter", "uranus", "square", _dt(2026, 9, 8), _dt(2026, 9, 18),
+             exact_dates=[_dt(2026, 9, 13)]),
+        _hit("solar_arc", "solar_arc:venus", "Midheaven", "trine", _dt(2026, 9, 1), _dt(2026, 9, 30),
+             exact_dates=[_dt(2026, 9, 10)]),
+    ]
+    # naive count would say 3 independent hits; the Jupiter pair is really
+    # one underlying transit pass through a tight natal cluster.
+    assert independent_corroborator_count(hits, [0, 1, 2], clusters) == 2

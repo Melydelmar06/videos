@@ -158,6 +158,15 @@ class TimingHit:
     evidence_eligible: bool = True
     evidence_note: Optional[str] = None
     evidence_strength: Optional[str] = None   # "strong" | "moderate" | "weak" | None
+    # Traceability for the strength call above, per astroengine.evidence:
+    # background_corroborators = other hits active during an overlapping
+    # window (same theme, unspecific timing); temporal_corroborators = the
+    # subset that also turn exact within a system-appropriate number of
+    # days of THIS hit's own exact date (see _temporal_proximity_days).
+    # Only temporal_corroborators can push a hit to "strong". Each entry is
+    # a short human-readable description of the corroborating hit.
+    background_corroborators: list = field(default_factory=list)
+    temporal_corroborators: list = field(default_factory=list)
 
 
 @dataclass

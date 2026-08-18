@@ -40,6 +40,14 @@ def _serialize_hit(hit: TimingHit, window_start: datetime, window_end: datetime)
         "evidence_eligible": hit.evidence_eligible,
         "evidence_note": hit.evidence_note,
         "evidence_strength": hit.evidence_strength,
+        "background_corroborators": list(hit.background_corroborators),
+        "temporal_corroborators": list(hit.temporal_corroborators),
+        "corroboration_note": (
+            "background_corroborators = other-system hits to the same point active during an "
+            "overlapping window (weak, unspecific timing evidence). temporal_corroborators = the "
+            "subset that also turn exact within a system-appropriate number of days of this hit's "
+            "own exact date -- only these can support a 'strong' rating; see astroengine.evidence."
+        ),
     }
 
 
