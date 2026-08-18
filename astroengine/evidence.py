@@ -388,8 +388,24 @@ def _closest_date_gap_days(dates_a: list[datetime], dates_b: list[datetime]) -> 
     return min(abs((a - b).total_seconds()) for a in dates_a for b in dates_b) / 86400.0
 
 
+def _anchor_dates_for_window(hit: TimingHit, window_start: datetime, window_end: datetime) -> list[datetime]:
+    """Which of this hit's exact_hit_dates are 'the pass being evaluated'
+    for this query window. A single TimingHit can carry several exact
+    dates (e.g. a retrograde station producing three passes months apart --
+    Saturn square Moon in the audit case: May 2026, Sep 2026, Feb 2027, all
+    on ONE hit record). Without this filter, a corroborator landing near an
+    EARLIER, unrelated pass could wrongly justify temporal corroboration
+    for a LATER pass being scored in a different window -- the same class
+    of "not actually close to the event in question" error the whole
+    background/temporal split exists to fix. Restricting to in-window dates
+    keeps the comparison anchored to the specific pass this window is
+    about."""
+    in_window = [d for d in hit.exact_hit_dates if window_start <= d <= window_end]
+    return in_window if in_window else hit.exact_hit_dates
+
+
 def compute_corroboration(
-    hits: list[TimingHit],
+    hits: list[TimingHit], window_start: datetime, window_end: datetime,
 ) -> tuple[list[list[int]], list[list[int]]]:
     """For each hit, two lists of OTHER hit indices:
 
@@ -399,10 +415,13 @@ def compute_corroboration(
 
       temporal[i]   -- the subset of background[i] whose own exact date(s)
       fall within that corroborator's system-appropriate proximity window
-      (_temporal_proximity_days) of one of hit i's own exact date(s).
-      "Independently peaks near the same date." A hit with no exact date of
-      its own cannot receive temporal corroboration (there is no date to be
-      close to) even if it has background corroborators.
+      (_temporal_proximity_days) of one of hit i's own exact date(s) THAT
+      FALLS WITHIN THIS QUERY WINDOW (_anchor_dates_for_window) --
+      "independently peaks near the specific date being evaluated," not
+      near some other pass of the same hit outside this window. A hit with
+      no exact date of its own cannot receive temporal corroboration
+      (there is no date to be close to) even if it has background
+      corroborators.
 
     Only evidence_eligible hits can corroborate or be corroborated -- a
     mirror duplicate contacting the same point at the same moment is not a
@@ -410,6 +429,7 @@ def compute_corroboration(
     """
     n = len(hits)
     canonical_targets = [canonicalize_point(h.natal_target)[0] for h in hits]
+    anchor_dates = [_anchor_dates_for_window(h, window_start, window_end) for h in hits]
     background: list[list[int]] = [[] for _ in range(n)]
     temporal: list[list[int]] = [[] for _ in range(n)]
 
@@ -432,7 +452,7 @@ def compute_corroboration(
             proximity = _temporal_proximity_days(hits[j])
             if proximity is None:
                 continue
-            gap = _closest_date_gap_days(hits[i].exact_hit_dates, hits[j].exact_hit_dates)
+            gap = _closest_date_gap_days(anchor_dates[i], hits[j].exact_hit_dates)
             if gap is not None and gap <= proximity:
                 temporal[i].append(j)
 
@@ -492,7 +512,7 @@ def assign_evidence_strength(hits: list[TimingHit], window_start: datetime, wind
     """Mutates hits in place, setting evidence_strength (and the
     background_corroborators / temporal_corroborators traceability lists)
     for every evidence_eligible hit (None/empty for ineligible ones)."""
-    background, temporal = compute_corroboration(hits)
+    background, temporal = compute_corroboration(hits, window_start, window_end)
     for i, hit in enumerate(hits):
         if not hit.evidence_eligible:
             hit.evidence_strength = None

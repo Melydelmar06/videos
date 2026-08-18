@@ -262,6 +262,31 @@ def test_open_ended_windows_with_no_exit_or_exact_date_still_detected_as_overlap
     assert sum(h.evidence_eligible for h in hits) == 1
 
 
+def test_temporal_corroboration_is_anchored_to_the_pass_in_this_window_not_an_earlier_one():
+    """Regression: a hit with multiple exact_hit_dates (e.g. a retrograde
+    station producing three separate passes months apart, all on ONE
+    TimingHit -- exactly the shape of the real Saturn-square-Moon hit) must
+    only accept temporal corroboration near the pass that actually falls
+    inside the window being scored, not near an earlier, unrelated pass."""
+    window_start, window_end = _dt(2027, 1, 1), _dt(2027, 3, 31)
+    hits = [
+        # three passes: May 2026, Sep 2026, Feb 2027 -- only Feb 2027 is
+        # the one being evaluated in this window.
+        _hit("transit", "transit:saturn", "moon", "square", _dt(2026, 5, 1), _dt(2027, 3, 1),
+             exact_dates=[_dt(2026, 5, 29), _dt(2026, 9, 24), _dt(2027, 2, 19)], orb=0.0),
+        # this progression turns exact Oct 15, 2026 -- only 21 days from
+        # the SEPTEMBER pass, but ~127 days from the FEBRUARY pass being
+        # scored here. Must NOT count as temporal for this window.
+        _hit("progression", "progressed:venus", "moon", "sextile", _dt(2026, 6, 1), _dt(2027, 6, 1),
+             exact_dates=[_dt(2026, 10, 15)], orb=0.0),
+    ]
+    annotate_timing_hit_evidence_eligibility(hits)
+    assign_evidence_strength(hits, window_start, window_end)
+    assert hits[0].evidence_strength != "strong"
+    assert hits[0].background_corroborators
+    assert not hits[0].temporal_corroborators
+
+
 def test_solar_return_never_supplies_temporal_corroboration():
     """req #4: Solar Return is a background annual theme only. Even when a
     solar-return hit's own window overlaps another hit's exact date very
