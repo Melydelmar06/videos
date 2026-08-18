@@ -399,9 +399,24 @@ def _anchor_dates_for_window(hit: TimingHit, window_start: datetime, window_end:
     of "not actually close to the event in question" error the whole
     background/temporal split exists to fix. Restricting to in-window dates
     keeps the comparison anchored to the specific pass this window is
-    about."""
+    about.
+
+    If no exact date falls inside the window at all (e.g. a narrow window
+    that starts just after, or ends just before, the nearest pass -- the
+    hit can still be "is_exact" via its wide effective_orb_for_window
+    fallback to orb_at_reference), fall back to the single exact date
+    CLOSEST to window_start, matching effective_orb_for_window's own
+    convention that orb_at_reference is evaluated as of window_start. Using
+    every exact date in that fallback (instead of just the nearest one)
+    would let a distant, unrelated pass anchor the comparison whenever its
+    gap to some corroborator happened to be small by coincidence.
+    """
     in_window = [d for d in hit.exact_hit_dates if window_start <= d <= window_end]
-    return in_window if in_window else hit.exact_hit_dates
+    if in_window:
+        return in_window
+    if not hit.exact_hit_dates:
+        return []
+    return [min(hit.exact_hit_dates, key=lambda d: abs((d - window_start).total_seconds()))]
 
 
 def compute_corroboration(

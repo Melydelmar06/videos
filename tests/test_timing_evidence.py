@@ -287,6 +287,32 @@ def test_temporal_corroboration_is_anchored_to_the_pass_in_this_window_not_an_ea
     assert not hits[0].temporal_corroborators
 
 
+def test_narrow_window_with_no_in_window_exact_date_anchors_to_nearest_pass():
+    """Regression: a narrow query window that contains none of a multi-pass
+    hit's exact dates (but starts/ends close enough to one of them that
+    orb_at_reference is still < 1 deg, e.g. a window opening a week after a
+    retrograde station's exact hit) must anchor temporal comparisons to the
+    NEAREST pass to window_start, not fall back to comparing against every
+    pass -- including a distant, unrelated one -- which could accept a
+    coincidentally-close corroborator that has nothing to do with the
+    period actually being queried."""
+    window_start, window_end = _dt(2026, 10, 1), _dt(2026, 10, 31)
+    hits = [
+        # exact Sep 24, 2026 (7 days before window) and Feb 19, 2027 (far
+        # future) -- window contains neither, but orb at Oct 1 is tight.
+        _hit("transit", "transit:saturn", "moon", "square", _dt(2026, 3, 1), _dt(2027, 4, 1),
+             exact_dates=[_dt(2026, 9, 24), _dt(2027, 2, 19)], orb=0.45),
+        # 21 days from the Sep 24 pass -- legitimately close to the pass
+        # nearest this window, so this SHOULD count as temporal.
+        _hit("progression", "progressed:venus", "moon", "sextile", _dt(2026, 6, 1), _dt(2027, 6, 1),
+             exact_dates=[_dt(2026, 10, 15)], orb=0.0),
+    ]
+    annotate_timing_hit_evidence_eligibility(hits)
+    assign_evidence_strength(hits, window_start, window_end)
+    assert hits[0].evidence_strength == "strong"
+    assert hits[0].temporal_corroborators
+
+
 def test_solar_return_never_supplies_temporal_corroboration():
     """req #4: Solar Return is a background annual theme only. Even when a
     solar-return hit's own window overlaps another hit's exact date very
