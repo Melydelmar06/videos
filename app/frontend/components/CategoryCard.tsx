@@ -9,6 +9,8 @@ const TIER_TOKEN: Record<CategoryReading["confidence"], string> = {
 
 export default function CategoryCard({ reading }: { reading: CategoryReading }) {
   const tier = TIER_TOKEN[reading.confidence];
+  const { why } = reading;
+
   return (
     <article
       className="rounded-3xl p-7 sm:p-9 flex flex-col gap-4"
@@ -45,6 +47,48 @@ export default function CategoryCard({ reading }: { reading: CategoryReading }) 
             <p key={i}>{para}</p>
           ))}
       </div>
+
+      <details className="group mt-1">
+        <summary
+          className="cursor-pointer select-none text-xs inline-flex items-center gap-1.5 w-fit"
+          style={{ color: "var(--text-faint)" }}
+        >
+          <span className="underline underline-offset-4 decoration-dotted">
+            Why am I seeing this?
+          </span>
+          <span className="transition-transform group-open:rotate-90">›</span>
+        </summary>
+        <dl
+          className="mt-3 pt-3 text-xs flex flex-col gap-1.5"
+          style={{ borderTop: "1px solid var(--line-soft)", color: "var(--text-faint)" }}
+        >
+          <Row label="Signal">
+            <span style={{ color: `var(--tier-${tier})` }}>{capitalize(reading.confidence)}</span>
+          </Row>
+          <Row label="Timing systems">
+            {why.independent_systems} independent {why.independent_systems === 1 ? "system" : "systems"}
+          </Row>
+          {why.main_window && <Row label="Main window">{why.main_window}</Row>}
+          {why.themes_involved.length > 0 && (
+            <Row label="Also shows up in">{why.themes_involved.join(" + ")}</Row>
+          )}
+        </dl>
+      </details>
     </article>
   );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="w-32 shrink-0 uppercase tracking-[0.06em]" style={{ fontSize: "10.5px" }}>
+        {label}
+      </dt>
+      <dd style={{ color: "var(--text-dim)" }}>{children}</dd>
+    </div>
+  );
+}
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

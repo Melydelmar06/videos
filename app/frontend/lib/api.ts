@@ -23,17 +23,38 @@ export type ReadingRequest = {
   timezone_name: string;
 };
 
+export type WhyPanel = {
+  tier: "strong signal" | "notable" | "minor undertone" | "quiet";
+  independent_systems: number;
+  main_window: string | null;
+  themes_involved: string[];
+};
+
 export type CategoryReading = {
   label: string;
   headline: string;
   body: string;
   confidence: "strong signal" | "notable" | "minor undertone" | "quiet";
+  why: WhyPanel;
+};
+
+export type BiggerPicture = {
+  headline: string;
+  body: string;
+};
+
+export type Timeline = {
+  now: string | null;
+  next: string | null;
+  later: string | null;
 };
 
 export type Reading = {
   natal_summary: string;
   window: { start: string; end: string };
   categories: Record<string, CategoryReading>;
+  bigger_picture: BiggerPicture;
+  timeline: Timeline;
 };
 
 export async function createReading(req: ReadingRequest): Promise<Reading> {

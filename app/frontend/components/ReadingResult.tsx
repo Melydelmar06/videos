@@ -1,5 +1,7 @@
 import { CATEGORY_ORDER, Reading } from "@/lib/api";
+import BiggerPicture from "./BiggerPicture";
 import CategoryCard from "./CategoryCard";
+import SeasonTimeline from "./SeasonTimeline";
 
 function formatDate(iso: string) {
   return new Date(iso + "T00:00:00Z").toLocaleDateString("en-US", {
@@ -41,6 +43,10 @@ export default function ReadingResult({
           return <CategoryCard key={key} reading={cat} />;
         })}
       </div>
+
+      <BiggerPicture picture={reading.bigger_picture} />
+
+      <SeasonTimeline timeline={reading.timeline} />
 
       <button
         onClick={onRestart}
