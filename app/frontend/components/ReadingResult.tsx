@@ -15,9 +15,11 @@ function formatDate(iso: string) {
 export default function ReadingResult({
   reading,
   onRestart,
+  restartLabel = "Read another chart",
 }: {
   reading: Reading;
   onRestart: () => void;
+  restartLabel?: string;
 }) {
   return (
     <div className="w-full max-w-2xl flex flex-col gap-10">
@@ -53,7 +55,7 @@ export default function ReadingResult({
         className="self-center text-sm underline underline-offset-4"
         style={{ color: "var(--text-faint)" }}
       >
-        Read another chart
+        {restartLabel}
       </button>
     </div>
   );
