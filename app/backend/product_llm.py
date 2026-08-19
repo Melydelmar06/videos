@@ -124,6 +124,43 @@ def generate_today_reading(natal_summary: str, active_dimensions: list[dict]) ->
     raise RuntimeError("model did not return a write_today tool call")
 
 
+PREPARE_SYSTEM_PROMPT = f"""You are writing a single short preparatory nudge for a personal \
+wellness app -- one or two sentences telling the reader a meaningful, evidenced window is \
+approaching soon, so they can prepare for it before it arrives. This is preparation, not \
+fortune-telling: never claim a specific external event will happen.
+
+{JARGON_BAN}
+
+{SYMBOLIC_FRAMING_RULE}
+
+{HARD_RULES}
+
+FORMAT: one or two sentences, direct and useful. Name roughly how many days away it is and what \
+kind of preparation might help (e.g. protecting recovery time, clearing space, or -- if the \
+period reads as expansive rather than demanding -- naming that this could be a good window to \
+start something). Do not use the word "forecast" more than once. Output ONLY the sentence(s), \
+nothing else."""
+
+
+def generate_prepare_nudge(evidence_text: str, days_away: int, character: str | None) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set -- cannot generate a reading")
+
+    user_prompt = (
+        f"Approaching window: {days_away} days away.\n"
+        f"Character: {character or 'unclear'}\n"
+        f"Evidence: {evidence_text}\n\n"
+        "Write the nudge now."
+    )
+    client = Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=MODEL, max_tokens=256, system=PREPARE_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    return "".join(block.text for block in response.content if block.type == "text").strip()
+
+
 def generate_practice_copy(
     practice_type: str, mood: str | None, chart_state: str, human_chart_mismatch: bool, driven_by: str,
 ) -> dict:

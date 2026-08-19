@@ -15,9 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))  # repo r
 
 import auth  # noqa: E402
 import checkin_service  # noqa: E402
+import prepare_service  # noqa: E402
 import profile as profile_service  # noqa: E402
 import reading as reading_module  # noqa: E402
 import regulate_service  # noqa: E402
+import season_service  # noqa: E402
 import today_service  # noqa: E402
 from db import get_conn  # noqa: E402
 
@@ -215,3 +217,26 @@ async def get_regulate(user_id: int = Depends(current_user_id)):
         return regulate_service.get_regulate_recommendation(conn, user_id, profile, mood)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Season (the six-month reading, cached) + Prepare (proximity nudge)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/season")
+async def get_season(refresh: bool = False, user_id: int = Depends(current_user_id)):
+    profile = _require_profile(user_id)
+    try:
+        return season_service.get_season_reading(get_conn(), user_id, profile, force_refresh=refresh)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/api/prepare")
+async def get_prepare(user_id: int = Depends(current_user_id)):
+    profile = _require_profile(user_id)
+    try:
+        nudge = prepare_service.get_prepare_nudge(profile)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return nudge or {}
