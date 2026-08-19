@@ -96,6 +96,7 @@ def _category_schema() -> dict:
                 "body": {"type": "string", "description": "2-4 short paragraphs, second person, plain language"},
             },
             "required": ["headline", "body"],
+            "additionalProperties": False,
         }
         for key in CATEGORY_ORDER
     }
@@ -170,6 +171,7 @@ def generate_reading(
         tools=[{
             "name": "write_reading",
             "description": "Submit the finished magazine-style reading.",
+            "strict": True,
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -177,6 +179,7 @@ def generate_reading(
                         "type": "object",
                         "properties": _category_schema(),
                         "required": CATEGORY_ORDER,
+                        "additionalProperties": False,
                     },
                     "bigger_picture": {
                         "type": "object",
@@ -185,6 +188,7 @@ def generate_reading(
                             "body": {"type": "string", "description": "1-2 short paragraphs synthesizing the season"},
                         },
                         "required": ["headline", "body"],
+                        "additionalProperties": False,
                     },
                     "timeline": {
                         "type": "object",
@@ -194,9 +198,11 @@ def generate_reading(
                             "later": {"type": ["string", "null"]},
                         },
                         "required": ["now", "next", "later"],
+                        "additionalProperties": False,
                     },
                 },
                 "required": ["categories", "bigger_picture", "timeline"],
+                "additionalProperties": False,
             },
         }],
         tool_choice={"type": "tool", "name": "write_reading"},

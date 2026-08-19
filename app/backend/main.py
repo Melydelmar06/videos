@@ -161,7 +161,8 @@ def _require_profile(user_id: int):
 async def get_today(user_id: int = Depends(current_user_id)):
     profile = _require_profile(user_id)
     try:
-        return today_service.get_today_reading(get_conn(), user_id, profile)
+        payload = today_service.get_today_reading(get_conn(), user_id, profile)
+        return today_service.to_public_dict(payload)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 

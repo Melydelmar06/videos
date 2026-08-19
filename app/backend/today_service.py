@@ -116,3 +116,12 @@ def get_today_reading(conn: sqlite3.Connection, user_id: int, profile, target_da
     )
     conn.commit()
     return payload
+
+
+def to_public_dict(payload: dict) -> dict:
+    """Strips internal-only fields (currently just _dimension_reads_tier_
+    character, kept in the cached row for regulate_service) before this
+    payload is returned to an API client. Callers that need the internal
+    field (regulate_service) should read the cached row directly instead
+    of going through this."""
+    return {k: v for k, v in payload.items() if not k.startswith("_")}

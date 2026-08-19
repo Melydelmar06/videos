@@ -107,13 +107,18 @@ def generate_today_reading(natal_summary: str, active_dimensions: list[dict]) ->
         tools=[{
             "name": "write_today",
             "description": "Submit today's plain-language snapshot.",
+            "strict": True,
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "overall_note": {"type": ["string", "null"]},
-                    "dimensions": {"type": "object", "properties": _dimension_schema(), "required": DIMENSION_KEYS},
+                    "dimensions": {
+                        "type": "object", "properties": _dimension_schema(), "required": DIMENSION_KEYS,
+                        "additionalProperties": False,
+                    },
                 },
                 "required": ["overall_note", "dimensions"],
+                "additionalProperties": False,
             },
         }],
         tool_choice={"type": "tool", "name": "write_today"},
@@ -187,6 +192,7 @@ def generate_practice_copy(
         tools=[{
             "name": "write_practice",
             "description": "Submit the practice.",
+            "strict": True,
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -195,6 +201,7 @@ def generate_practice_copy(
                     "practice_body": {"type": "string"},
                 },
                 "required": ["intro", "practice_title", "practice_body"],
+                "additionalProperties": False,
             },
         }],
         tool_choice={"type": "tool", "name": "write_practice"},
