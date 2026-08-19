@@ -382,17 +382,20 @@ recognize the same person across visits. Proposed additions:
 
 ---
 
-## 14. Open questions for you before build starts
+## 14. Decisions (confirmed)
 
-1. **Identity/persistence approach** — even a minimal email+magic-link is
-   new scope beyond what V1 needed. Comfortable starting there, or is
-   there a preference (device-bound anonymous account, something else)?
-2. **Daily dimension mapping** — proposing 7 axes reusing the existing
-   house/planet significator pattern; want to review that mapping in
-   detail before it's built, or trust the same review process used for
-   `theme_definitions.py`?
-3. **Season regeneration cadence** — proposed every 2–4 weeks or on
-   demand; any preference?
-4. **Prepare nudge proximity threshold** — proposed 14 days; adjust?
+1. **Identity/persistence** — email + magic link. No password. In this
+   dev environment there's no outbound email sending configured, so the
+   magic-link token is returned directly in the API response / logged
+   server-side rather than emailed, clearly marked as a dev-mode
+   shortcut — swapping in a real mail sender later doesn't change the
+   auth flow.
+2. **Daily dimension mapping** — built the same way as
+   `theme_definitions.py` (generic, chart-agnostic, house/planet
+   significators), reviewed the same way Season was: through real output,
+   not a spec doc first.
+3. **Season regeneration cadence** — every 2–4 weeks, or on demand via an
+   explicit refresh.
+4. **Prepare nudge proximity threshold** — 14 days.
 
-Nothing above gets implemented until you've reviewed this document.
+Build starts now.
