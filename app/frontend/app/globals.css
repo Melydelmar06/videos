@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #FBF8F4;
+  --surface: #FFFFFF;
+  --surface-2: #F3EEE7;
+  --text: #241F2E;
+  --text-dim: #6B6478;
+  --text-faint: #9C93A8;
+  --accent: #A8527A;
+  --accent-soft: rgba(168, 82, 122, 0.10);
+  --line: rgba(36, 31, 46, 0.12);
+  --line-soft: rgba(36, 31, 46, 0.07);
+
+  --orb-rose: #E8A0C4;
+  --orb-gold: #F0C987;
+  --orb-lavender: #B9A7E0;
+  --orb-teal: #8FD1C7;
+
+  --tier-strong: #A8527A;
+  --tier-strong-soft: rgba(168, 82, 122, 0.12);
+  --tier-notable: #B08A3E;
+  --tier-notable-soft: rgba(176, 138, 62, 0.12);
+  --tier-minor: #6B6478;
+  --tier-minor-soft: rgba(107, 100, 120, 0.10);
+  --tier-quiet: #9C93A8;
+  --tier-quiet-soft: rgba(156, 147, 168, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14111C;
+    --surface: #1D1926;
+    --surface-2: #262032;
+    --text: #F2EEF7;
+    --text-dim: #B3A9C4;
+    --text-faint: #756C89;
+    --accent: #E8A0C4;
+    --accent-soft: rgba(232, 160, 196, 0.14);
+    --line: rgba(242, 238, 247, 0.14);
+    --line-soft: rgba(242, 238, 247, 0.07);
+
+    --orb-rose: #D98FBB;
+    --orb-gold: #E0BA80;
+    --orb-lavender: #A996D6;
+    --orb-teal: #74C2B6;
+
+    --tier-strong: #E8A0C4;
+    --tier-strong-soft: rgba(232, 160, 196, 0.16);
+    --tier-notable: #E0BA80;
+    --tier-notable-soft: rgba(224, 186, 128, 0.16);
+    --tier-minor: #B3A9C4;
+    --tier-minor-soft: rgba(179, 169, 196, 0.14);
+    --tier-quiet: #756C89;
+    --tier-quiet-soft: rgba(117, 108, 137, 0.14);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
