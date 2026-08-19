@@ -89,16 +89,24 @@ LIFE_CATEGORIES: dict[str, dict] = {
 }
 
 
-def build_category_significators(
-    chart: NatalChart, settings: AstrologySettings, category_key: str,
+def significators_for_houses(
+    chart: NatalChart, settings: AstrologySettings, houses: list[int],
+    extra: list[ThemeSignificator] | None = None,
 ) -> ThemeDefinition:
-    """ThemeDefinition for one LIFE_CATEGORIES entry, derived from this
-    specific chart. Requires chart.houses/chart.angles to be populated
-    (i.e. a known birth time -- see NatalChart)."""
-    if category_key not in LIFE_CATEGORIES:
-        raise ValueError(f"unknown life category: {category_key!r}")
+    """Core, reusable derivation: ThemeSignificators for an arbitrary list
+    of house numbers, from this specific chart. Requires chart.houses to
+    be populated (i.e. a known birth time -- see NatalChart). `extra` lets
+    a caller merge in significators that AREN'T house-derived (e.g. a
+    dimension's fixed, chart-agnostic planet significators -- see
+    astroengine.daily_dimensions) through the same dedup pass, so a planet
+    that's both a fixed significator and a house ruler doesn't produce two
+    separate entries.
+
+    Used by both LIFE_CATEGORIES (six-month Season reading) and
+    DAILY_DIMENSIONS (Today screen) -- see astroengine.daily_dimensions.
+    """
     if not chart.houses:
-        raise ValueError("build_category_significators requires a chart with known houses (birth time known)")
+        raise ValueError("significators_for_houses requires a chart with known houses (birth time known)")
 
     houses_by_number = {h.house_number: h for h in chart.houses}
     significators: list[ThemeSignificator] = []
@@ -110,7 +118,7 @@ def build_category_significators(
             seen.add(key)
             significators.append(ThemeSignificator(point, role, specificity))
 
-    for house_num in LIFE_CATEGORIES[category_key]["houses"]:
+    for house_num in houses:
         house = houses_by_number.get(house_num)
         if house is None:
             continue
@@ -132,4 +140,17 @@ def build_category_significators(
         if angle is not None:
             add(angle, f"{ordinal} house cusp (angle)", "high")
 
+    for sig in extra or []:
+        add(sig.point, sig.role, sig.specificity)
+
     return significators
+
+
+def build_category_significators(
+    chart: NatalChart, settings: AstrologySettings, category_key: str,
+) -> ThemeDefinition:
+    """ThemeDefinition for one LIFE_CATEGORIES entry, derived from this
+    specific chart."""
+    if category_key not in LIFE_CATEGORIES:
+        raise ValueError(f"unknown life category: {category_key!r}")
+    return significators_for_houses(chart, settings, LIFE_CATEGORIES[category_key]["houses"])
